@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { runAgent } from "@/lib/agent";
+import { runAgent, type Proposal } from "@/lib/agent";
+import { addEntry } from "@/lib/ledger";
 
 async function handle(message: string) {
   if (!message.trim()) {
@@ -7,7 +8,23 @@ async function handle(message: string) {
   }
   try {
     const result = await runAgent(message.trim());
-    return NextResponse.json({ ok: true, ...result });
+
+    // The cast tells TypeScript the proposal can be set by the agent's tools.
+    const proposal = result.proposal as Proposal | null;
+
+    // The server keeps its own copy of the proposal. The checkout routes read the
+    // price from here, never from the browser.
+    let proposalId: string | null = null;
+    if (proposal) {
+      const entry = addEntry({
+        type: "proposal",
+        summary: `Proposed ${proposal.product.title} at $${proposal.product.price.toFixed(2)}`,
+        detail: proposal,
+      });
+      proposalId = entry.id;
+    }
+
+    return NextResponse.json({ ok: true, ...result, proposalId });
   } catch (error) {
     return NextResponse.json({ ok: false, error: String(error) }, { status: 500 });
   }

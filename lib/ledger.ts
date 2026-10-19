@@ -4,11 +4,11 @@ import path from "node:path";
 export type LedgerEntry = {
   id: string;
   time: string;
-  type: "decision" | "purchase";
+  type: "decision" | "purchase"| "proposal";
   summary: string;
   amount?: number; // only for type "purchase"
   detail?: unknown;
-};
+};   
 
 const FILE = path.join(process.cwd(), "data", "ledger.json");
 
@@ -45,4 +45,7 @@ export function spentThisMonth(now = new Date()): number {
   return read()
     .filter((e) => e.type === "purchase" && e.time.startsWith(ym))
     .reduce((sum, e) => sum + (e.amount ?? 0), 0);
+}
+export function getEntry(id: string): LedgerEntry | undefined {
+     return read().find((e) => e.id === id);
 }

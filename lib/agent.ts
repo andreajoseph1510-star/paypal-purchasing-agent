@@ -13,9 +13,9 @@ export type LogLine = { step: number; tool: string; args: unknown; result: unkno
 
 const SYSTEM_PROMPT = `You are a purchasing agent for a small team.
 Find the best-value, in-stock product that fits the request.
-Always: 1) search_products, 2) check_policy on your best candidate, 3) propose_purchase if it is allowed.
-If the policy blocks a product, try a cheaper alternative or explain clearly why nothing fits.
-Finish with a short reply (two sentences) explaining your choice or why you could not buy.`;
+Steps: 1) call search_products once. 2) Call propose_purchase for your best candidate. It checks the spending policy itself.
+If propose_purchase says the policy blocked it, try one cheaper alternative from the same search results, or explain clearly why nothing fits.
+Finish with a short reply (two sentences) explaining your choice or why you could not buy. Never say the purchase is approved or completed: a human must still approve it.`;
 
 const TOOLS: any[] = [
   {
