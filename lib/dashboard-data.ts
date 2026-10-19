@@ -277,13 +277,28 @@ function balanceRows({ balances = [] }: Balances) {
 
 const TRANSACTION_WINDOW_MS = TRANSACTION_SEARCH_MAX_DAYS * DAY_MS;
 
+// If one PayPal endpoint is refused (e.g. 403 for a missing sandbox feature), log it and
+// use an empty fallback so the rest of the dashboard still loads.
+async function safe<T>(label: string, load: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await load();
+  } catch (error) {
+    console.warn(`[dashboard] Could not load ${label}, using empty data:`, error);
+    return fallback;
+  }
+}
+
 export async function getDashboardData(asOf = new Date()) {
   const [products, plans, invoices, transactions, balances] = await Promise.all([
-    listProducts(),
-    listPlans(),
-    listInvoices(),
-    searchTransactions(new Date(asOf.getTime() - TRANSACTION_WINDOW_MS), asOf),
-    getBalances(),
+    safe('products', () => listProducts(), [] as Product[]),
+    safe('plans', () => listPlans(), [] as Plan[]),
+    safe('invoices', () => listInvoices(), [] as Invoice[]),
+    safe(
+      'transactions',
+      () => searchTransactions(new Date(asOf.getTime() - TRANSACTION_WINDOW_MS), asOf),
+      [] as Transaction[],
+    ),
+    safe('balances', () => getBalances(), {} as Balances),
   ]);
   const today = asOf.toISOString().slice(0, 10);
 
@@ -300,5 +315,4 @@ export async function getDashboardData(asOf = new Date()) {
     balances: balanceRows(balances),
   };
 }
-
 export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
