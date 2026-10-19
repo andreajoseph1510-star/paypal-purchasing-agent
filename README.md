@@ -1,91 +1,126 @@
-> [!TIP]
-> **PayPal AI Hackathon**
-> 
-> Win part of $69,750 in total prizes
-> 
-> Build What's Next with PayPal and AI is a global online hackathon inviting developers, designers, founders, students, and builders to create something new using PayPal and AI.
-> 
-> There are no prescribed problem statements and no set of tracks. Build an agent, an app, an automation, a new payment experience, a business tool, a social product, or something we haven't thought of yet.
-> 
-> https://paypalaihackathon.devpost.com
+# Steward: an AI purchasing agent with spending guardrails
 
-# PayPal SDK data pages
+Steward lets a small team describe what they need ("a waterproof hiking jacket under $100"). An AI agent searches real products, checks every candidate against the team's spending policy, and proposes one purchase. A human approves it, and PayPal takes the payment. The rules are enforced in code, so the AI cannot talk its way past them.
 
-A Next.js app that reads PayPal sandbox data over the [PayPal REST API](https://developer.paypal.com/api/rest/) and shows it two ways:
+Built for the PayPal AI Hackathon.
 
-- **Endpoint pages**: one [AG Grid](https://www.ag-grid.com/react-data-grid/) per PayPal endpoint the demo calls, showing what each returns.
-- **Dashboard** (`/dashboard`): an [AG Studio](https://www.ag-grid.com/studio/) report over all of that data, joined together, which you can edit and save in the browser.
+**Live demo:** _add your Render URL here, or delete this line_
+**Demo video:** _add your YouTube link here_
 
-## Run locally
+## The problem
 
-Requires Node.js 20.9 or later and a PayPal sandbox REST app ([developer.paypal.com](https://developer.paypal.com/dashboard/applications/sandbox)). The transactions and balances pages also need the app's **Transaction search** feature enabled.
+Small teams and clubs lose time on purchasing: someone finds an item, someone else approves it, someone pays. Handing this to an AI agent is tempting, but an agent with a payment method and no hard limits is risky. Steward shows a safer pattern: the AI does the searching and reasoning, while code enforces the policy and a human gives the final yes.
+
+## What it does
+
+1. **Ask:** type a request on the `/agent` page.
+2. **Search and decide:** a Gemini agent searches products through Channel3, then proposes the best-value in-stock option.
+3. **Policy check:** every proposal is checked against the policy (per-purchase cap, monthly budget, blocked categories). Blocked items are refused with a plain-language reason.
+4. **Human approval:** the proposal appears as a card with the product, price, reasoning and policy result. Nothing is charged until a person clicks Approve.
+5. **Pay with PayPal:** approval creates a PayPal order, the buyer approves it in the PayPal sandbox, and the server verifies and captures the payment.
+6. **Audit trail:** the `/history` page shows the monthly budget, completed purchases, and every step the agent took.
+
+Default policy (see `lib/policy.ts`): $120 per purchase, $500 per month, human approval above $60, and blocked keywords such as gift cards and gambling.
+
+## How PayPal is used
+
+- **Orders API v2:** `POST /v2/checkout/orders` creates the order (`intent: CAPTURE`) and `POST /v2/checkout/orders/{id}/capture` captures it after buyer approval.
+- **Server-side verification:** before capturing, the server fetches the order from PayPal and confirms that it belongs to our recorded proposal (`custom_id`) and that the amount matches exactly. The price always comes from the server's own record, never from the browser.
+- **Idempotency:** `PayPal-Request-Id` headers prevent duplicate orders and captures, and the capture route is safe to call twice.
+- **Policy re-check:** the policy is checked again at order creation and again before capture.
+- **Existing boilerplate:** the `/dashboard` page and read-only PayPal data pages come from the PayPal x AG Grid boilerplate (Reporting, Catalog, Subscriptions and Invoicing endpoints). We made the dashboard tolerate endpoints the sandbox app is not permitted to read.
+
+## How AI is used
+
+- **Gemini (`@google/genai`) with function calling** runs the agent in `lib/agent.ts`. It has three tools: `search_products`, `check_policy` and `propose_purchase`.
+- The model decides what to search for, which candidate is best value, and how to explain the choice. It loops over tool calls until it can answer.
+- **The guardrail is code, not a prompt.** `propose_purchase` re-runs the policy check and refuses the proposal if it fails, whatever the model says. Product prices come from our own search results, so the model cannot invent a price.
+- **Channel3** supplies live product data (titles, prices, retailers, images). If it fails or returns nothing, a small fallback catalog keeps the demo working.
+
+## Architecture
+
+```
+Browser (/agent)
+   |  POST /api/agent
+   v
+Gemini agent (lib/agent.ts) --tools--> Channel3 search (lib/channel3.ts)
+   |                           \-----> Policy check   (lib/policy.ts)
+   v
+Proposal saved by the server (lib/ledger.ts -> data/ledger.json)
+   |  Approve button -> POST /api/checkout/create
+   v
+PayPal Orders API: create order -> buyer approves in sandbox
+   |  return page -> POST /api/checkout/capture
+   v
+Server verifies order + amount + policy -> captures -> records purchase
+   |
+   v
+/history: budget, purchases, full audit trail
+```
+
+## Run it yourself
+
+Requirements: Node.js 20.9 or newer.
 
 ```bash
+git clone <this repo's URL>
+cd <repo folder>
 npm install
-cp env.example .env.local   # then fill in the values
+cp env.example .env.local      # on Windows PowerShell: copy env.example .env.local
+```
+
+Fill in `.env.local`:
+
+| Variable | Where to get it |
+| --- | --- |
+| `PAYPAL_CLIENT_ID`, `PAYPAL_SECRET` | developer.paypal.com, Apps & Credentials, **Sandbox**. Enable the **Transaction search** feature on the app. |
+| `CHANNEL3_API_KEY` | trychannel3.com/developers |
+| `GEMINI_API_KEY` | aistudio.google.com |
+| `GEMINI_MODEL` | for example `gemini-3.5-flash` |
+| `APP_URL` | `http://localhost:3000` locally, or your deployed URL |
+
+Then:
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Next.js only loads the dotted `.env.local`; it is git-ignored, so credentials stay out of the repo.
+Open http://localhost:3000/agent.
 
-Other scripts: `npm run build` (production build), `npm run start` (serve the build), `npm run lint`.
+### Sandbox buyer account
 
-### AG Studio licence (optional)
+Use this PayPal sandbox **Personal** account on the PayPal approval page (fake money):
 
-Set `AG_STUDIO` in `.env.local` to your AG Studio licence key. The dashboard passes it to `AgStudioProvider`.
+- Email: _add your sandbox buyer email_
+- Password: _add your sandbox buyer password_
 
-### AI assistant (optional)
+### Try it
 
-The AG Studio dashboard at `/dashboard` has an AI assistant backed by OpenAI. The key is taken from the first of these that is set; with neither, the assistant is hidden:
+1. Click an example prompt such as "a waterproof hiking jacket under $100" and press **Ask agent**.
+2. Review the proposal card, then click **Approve and pay with PayPal**.
+3. Log in with the sandbox buyer and approve. You return to a "Purchase complete" page.
+4. Open `/history` to see the budget bar and the audit trail.
+5. Ask for something over the cap, such as a $500 laptop, and watch the policy refuse it.
 
-1. `AG_STUDIO_OPENAI_API_KEY`, specific to this app. Put it in `.env.local` to choose the key for this demo.
-2. `OPENAI_API_KEY`, the name OpenAI's own tools use. If you already export one (e.g. in `~/.zshrc`), the demo uses it with no setup, and spends against it.
+Developer shortcut (development only): `/api/dev/test-checkout` skips the AI and sends a policy-approved product straight to PayPal, which is handy for testing payments without using Gemini quota.
 
-A separate name is needed because Next.js prefers variables already in the environment over `.env.local`, so a globally exported `OPENAI_API_KEY` can't be overridden per project. The server logs which variable it used (never the key) the first time the assistant is configured.
+## Honest limits
 
-`OPENAI_MODELS` lists the model ids the assistant may use, comma-separated, first one the default (`gpt-5.4-mini` when unset); with two or more, the chat offers a model picker.
+- This is a **prototype running against the PayPal sandbox**. No real money moves.
+- Channel3 buy links point to the retailers' own sites, and PayPal cannot pay those retailers directly. In this prototype the PayPal payment goes to the merchant account as a purchase order the app records, and the retailer link is kept as the fulfilment reference.
+- Payment confirmation is verified and captured on the server when the buyer returns. We did not add PayPal webhooks, which would be the next step for production.
+- Purchases and the audit trail are stored in a local file (`data/ledger.json`). A hosted free tier may reset it when it restarts.
+- The Gemini free tier has low rate limits, so the agent retries when it is rate limited and a run can take up to a minute.
+- The dashboard's invoice widgets stay empty if the sandbox app is not permitted to read invoices.
 
-The key never reaches the browser. Studio's adapter ([`openai-adapter.ts`](app/dashboard/studio/openai-adapter.ts), copied from the AG Studio docs) runs client-side and posts to this app's own [`/api/ai/responses`](app/api/ai/responses/route.ts), which adds the key, only allows the configured models, caps output tokens, and streams OpenAI's reply back.
+## Built during the hackathon
 
-In production `.env.local` isn't deployed: set the variable in your host's environment (e.g. Vercel project settings, `docker run --env-file`, or a secrets manager), as with the PayPal credentials. The route has no auth or rate limiting, so don't deploy it publicly with a real key without adding one.
+Everything under `lib/agent.ts`, `lib/policy.ts`, `lib/ledger.ts`, `lib/channel3.ts`, `lib/paypal-orders.ts`, `app/agent`, `app/history` and `app/api/{agent,checkout}`, plus the dashboard changes described above. The base project is the PayPal x AG Grid hackathon boilerplate.
 
-## How it works
+## Tools
 
-```
-lib/paypal.ts            Every PayPal call: OAuth token, paging, retries, response types
-lib/dashboard-data.ts    Turns those responses into the dashboard's related tables
-app/(endpoints)/         One page per endpoint, each rendering an AG Grid
-app/dashboard/           The AG Studio dashboard
-app/api/ai/responses/    Server-side proxy for the dashboard's AI assistant
-```
+Gemini (agent reasoning and tool calling), Channel3 (product search), PayPal Orders and Reporting APIs, Next.js, TypeScript, AG Studio (from the boilerplate dashboard).
 
-[`lib/paypal.ts`](lib/paypal.ts) calls the REST API with plain `fetch`, no SDK. It gets an OAuth access token with the client-credentials grant and caches it until just before it expires. It follows `page`/`total_pages` paging, and retries on 401, 429 and 5xx responses. Its types are hand-written for the fields this demo reads, in the API's own snake_case.
+## License
 
-Every page is a server component that calls `await connection()`, so it renders per request with live data instead of being prerendered at build time. PayPal credentials never leave the server.
-
-## Endpoint pages
-
-Each page in [`app/(endpoints)`](app/(endpoints)) calls one function in `lib/paypal.ts`, maps the response to flat rows, and passes them with plain column definitions to the shared [`DataGrid`](app/(endpoints)/data-grid.tsx). The page header shows the REST calls behind it.
-
-| Page | `lib/paypal.ts` function | REST calls |
-|---|---|---|
-| [`/products`](app/(endpoints)/products/page.tsx) | `listProducts()` | `GET /v1/catalogs/products`, then `GET /v1/catalogs/products/{id}` per product |
-| [`/plans`](app/(endpoints)/plans/page.tsx) | `listPlans()` | `GET /v1/billing/plans`, then `GET /v1/billing/plans/{id}` per plan |
-| [`/invoices`](app/(endpoints)/invoices/page.tsx) | `listInvoices()` | `GET /v2/invoicing/invoices`, then `GET /v2/invoicing/invoices/{id}` per invoice |
-| [`/transactions`](app/(endpoints)/transactions/page.tsx) | `searchTransactions(start, end)` | `GET /v1/reporting/transactions` |
-| [`/balances`](app/(endpoints)/balances/page.tsx) | `getBalances()` | `GET /v1/reporting/balances` |
-
-Things worth knowing about these endpoints:
-
-- **List endpoints return summaries.** Products have no type or category, plans no billing cycles, and invoices no line items, payments or refunds. So each record is fetched again in full, which is why these pages take a second or two.
-- **Billing plans keep their price in `billing_cycles`.** There is an optional `TRIAL` cycle, then the `REGULAR` cycle; `total_cycles: 0` means it bills until cancelled.
-- **Transaction Search covers at most 31 days per request** and rejects fractional seconds in dates. New activity can take up to three hours to appear. `fields=all` adds `payer_info` to each `transaction_info`. Event codes are [PayPal T-codes](https://developer.paypal.com/docs/transaction-search/transaction-event-codes/) (`T0001` = payout); status is `S` success, `P` pending, `D` denied, `V` reversed or `F` partially refunded.
-- **Amounts are decimal strings with a currency**, e.g. `{ "value": "2.99", "currency_code": "USD" }`. `amountOf()` turns them into numbers, and the grid formats money columns in each row's currency.
-
-### The grid
-
-Pages are server components, so the column definitions they pass to the grid must be plain data, with no functions. Money columns use the `type: 'money'` column type, defined in `data-grid.tsx`, which formats the value in the row's `currency`. Date columns use AG Grid's built-in `cellDataType: 'dateString'` or `'dateTimeString'`. Every column can be sorted and filtered, and the search box filters across all columns.
-
-## Dashboard
-
-[`/dashboard`](app/dashboard/page.tsx) fetches all five endpoints at once. [`lib/dashboard-data.ts`](lib/dashboard-data.ts) turns them into related tables: customers, invoices, invoice line items, invoice payments, products, plans, transactions, payouts and balances. AG Studio's data sources, relationships, theme, default report and AI assistant are configured in [`app/dashboard/studio`](app/dashboard/studio). Reports you create or edit are saved in the browser's localStorage.
+MIT, see [LICENSE](LICENSE).
