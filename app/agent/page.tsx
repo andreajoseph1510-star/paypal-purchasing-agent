@@ -86,6 +86,7 @@ export default function AgentPage() {
   return (
     <main className="mx-auto max-w-3xl p-6">
       <h1 className="text-3xl font-bold text-[#001c64]">Purchasing agent</h1>
+      <a href="/history" className="text-sm font-semibold text-[#0070e0]">View spending and audit trail →</a>
       <p className="mt-1 text-gray-600">
         Describe what your team needs. The agent searches, checks the spending
         policy, and proposes one purchase for your approval.
