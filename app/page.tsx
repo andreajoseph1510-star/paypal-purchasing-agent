@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Shell from "./components/shell";
+import ScaleArt from "./components/ScaleArt";
 import { DEFAULT_POLICY } from "@/lib/policy";
 
 const SAMPLE = [
@@ -8,7 +9,7 @@ const SAMPLE = [
     item: "Oakhowe Isotex Waterproof Hiking Jacket",
     price: "$39.99",
     tone: "ok",
-    status: "You approved it and PayPal took the payment",
+    status: "Approved and paid with PayPal",
   },
   {
     ask: "A 27-inch 4K monitor",
@@ -33,7 +34,7 @@ export default function Home() {
   return (
     <Shell>
       <section className="st-hero">
-        <div>
+        <div className="st-hero-text">
           <h1>An AI buyer with a hard spending limit.</h1>
           <p className="lead">
             Tell Steward what your team needs. It finds the item, checks it against your budget rules, and
@@ -47,19 +48,40 @@ export default function Home() {
               See the audit trail
             </Link>
           </div>
+          <p className="st-muted st-small" style={{ marginTop: 20 }}>
+            Runs on the PayPal sandbox. No real money moves.
+          </p>
         </div>
+        <div className="st-hero-art">
+          <ScaleArt />
+        </div>
+      </section>
 
-        <div className="st-sample" aria-label="Example requests">
-          {SAMPLE.map((row) => (
-            <div key={row.ask} className="st-sample-row">
-              <p className="st-label">You asked for: {row.ask}</p>
-              <p className="st-sample-item">{row.item}</p>
-              <div className="st-sample-foot">
-                <span className={`st-tag ${row.tone}`}>{row.status}</span>
-                <span className="st-money">{row.price}</span>
-              </div>
-            </div>
-          ))}
+      <section className="st-section">
+        <h2>Two requests, two outcomes</h2>
+        <div className="st-scroll">
+          <table className="st-table">
+            <thead>
+              <tr>
+                <th>You asked for</th>
+                <th>Best match found</th>
+                <th className="num">Price</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SAMPLE.map((row) => (
+                <tr key={row.ask}>
+                  <td>{row.ask}</td>
+                  <td>{row.item}</td>
+                  <td className="num st-money">{row.price}</td>
+                  <td>
+                    <span className={`st-tag ${row.tone}`}>{row.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -87,7 +109,7 @@ export default function Home() {
         <h2>Under the hood</h2>
         <p className="st-muted" style={{ maxWidth: "58ch" }}>
           Gemini runs the agent, Channel3 supplies live product listings, and PayPal Orders handles the
-          payment. Everything runs against the PayPal sandbox, so no real money moves.
+          payment.
         </p>
         <p className="st-label" style={{ marginTop: 28 }}>
           PayPal sandbox data

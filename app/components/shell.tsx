@@ -1,13 +1,16 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { display, mono } from "../font";
+import { serif, sans, mono } from "../font";
 
 export default function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className={`st ${display.variable} ${mono.variable}`}>
-      <div className="st-wrap">
-        <header className="st-nav">
+    <div className={`st ${serif.variable} ${sans.variable} ${mono.variable}`}>
+      <header className="st-bar">
+        <div className="st-bar-in">
           <Link href="/" className="st-brand">
+            <span className="st-mark" aria-hidden="true">
+              S
+            </span>
             Steward
           </Link>
           <nav className="st-links" aria-label="Main">
@@ -15,9 +18,12 @@ export default function Shell({ children }: { children: ReactNode }) {
             <Link href="/history">History</Link>
             <Link href="/dashboard">PayPal data</Link>
           </nav>
-        </header>
-        {children}
-      </div>
+          <Link href="/agent" className="st-btn ghost">
+            Get started
+          </Link>
+        </div>
+      </header>
+      <div className="st-main">{children}</div>
     </div>
   );
 }

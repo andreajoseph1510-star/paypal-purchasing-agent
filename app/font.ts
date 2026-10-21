@@ -1,8 +1,14 @@
-import { Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
+import { Newsreader, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 
-export const display = Bricolage_Grotesque({
+export const serif = Newsreader({
   subsets: ["latin"],
-  variable: "--font-display",
+  variable: "--font-serif",
+  display: "swap",
+});
+
+export const sans = Hanken_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-sans",
   display: "swap",
 });
 
