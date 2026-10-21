@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Product = {
   id: string;
@@ -19,12 +20,78 @@ type Proposal = {
   policy: { allowed: boolean; needsApproval: boolean; reasons: string[] };
 };
 type LogLine = { step: number; tool: string; args: unknown; result: unknown };
+type Budget = {
+  spent: number;
+  policy: {
+    perPurchaseCap: number;
+    monthlyBudget: number;
+    requireApprovalAbove: number;
+    blockedKeywords: string[];
+  };
+};
 
 const EXAMPLES = [
-  "a waterproof hiking jacket under $100",
-  "a 27 inch 4K monitor",
-  "a $500 laptop for the team",
+  "A waterproof hiking jacket under $100",
+  "A 27-inch 4K monitor",
+  "A $500 laptop for the team",
 ];
+
+const money = (n: number) => `$${n.toFixed(2)}`;
+
+function friendly(message: string) {
+  if (message.includes("429") || message.includes("RESOURCE_EXHAUSTED")) {
+    return "Gemini’s free quota is used up for now. Wait a minute and try again. If it keeps happening, today’s limit is spent.";
+  }
+  return message.replace(/^Error:\s*/, "").slice(0, 300);
+}
+
+function blockedReasons(log: LogLine[]): string[] {
+  const out: string[] = [];
+  for (const l of log) {
+    const r = l.result as any;
+    if (Array.isArray(r?.reasons) && (r.accepted === false || r.allowed === false)) {
+      out.push(...r.reasons);
+    }
+  }
+  return [...new Set(out)];
+}
+
+function describe(l: LogLine): string {
+  const args = (l.args ?? {}) as Record<string, unknown>;
+  const result = (l.result ?? {}) as Record<string, any>;
+  if (l.tool === "search_products") {
+    const n = Array.isArray(result.products) ? result.products.length : 0;
+    return `Searched for “${String(args.query ?? "")}” and found ${n} option${n === 1 ? "" : "s"}`;
+  }
+  if (result.error) return "Looked up an option that wasn’t in the search results";
+  if (l.tool === "check_policy") {
+    return result.allowed ? "Checked an option: within policy" : "Checked an option: refused by policy";
+  }
+  if (l.tool === "propose_purchase") {
+    return result.accepted ? "Proposed a purchase for your approval" : "Proposal refused by policy";
+  }
+  return l.tool;
+}
+
+function checksFor(p: Proposal, b: Budget | null) {
+  if (!b) return p.policy.reasons.map((text) => ({ tone: "ok" as const, text }));
+  const price = p.product.price;
+  const { perPurchaseCap, monthlyBudget, requireApprovalAbove } = b.policy;
+  const rows: { tone: "ok" | "warn"; text: string }[] = [
+    { tone: "ok", text: `Under the ${money(perPurchaseCap)} limit for one purchase` },
+    {
+      tone: "ok",
+      text: `Fits this month’s budget: ${money(b.spent + price)} of ${money(monthlyBudget)} after buying`,
+    },
+    { tone: "ok", text: "In stock and not in a blocked category" },
+  ];
+  rows.push(
+    price > requireApprovalAbove
+      ? { tone: "warn", text: `Over ${money(requireApprovalAbove)}, so it’s flagged for your attention` }
+      : { tone: "ok", text: `Under ${money(requireApprovalAbove)}, and you still confirm every purchase` }
+  );
+  return rows;
+}
 
 export default function AgentPage() {
   const [message, setMessage] = useState("");
@@ -35,6 +102,20 @@ export default function AgentPage() {
   const [log, setLog] = useState<LogLine[]>([]);
   const [error, setError] = useState("");
   const [decision, setDecision] = useState<"" | "approving" | "rejected">("");
+  const [budget, setBudget] = useState<Budget | null>(null);
+
+  async function loadBudget() {
+    try {
+      const res = await fetch("/api/budget", { cache: "no-store" });
+      setBudget(await res.json());
+    } catch {
+      /* the page still works without the sidebar numbers */
+    }
+  }
+
+  useEffect(() => {
+    loadBudget();
+  }, []);
 
   async function ask() {
     if (!message.trim() || loading) return;
@@ -45,6 +126,7 @@ export default function AgentPage() {
     setProposalId("");
     setLog([]);
     setDecision("");
+    loadBudget();
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -58,7 +140,7 @@ export default function AgentPage() {
       setProposalId(data.proposalId ?? "");
       setLog(data.log ?? []);
     } catch (e) {
-      setError(String(e));
+      setError(friendly(String(e)));
     } finally {
       setLoading(false);
     }
@@ -76,144 +158,177 @@ export default function AgentPage() {
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error ?? "Could not start checkout");
-      window.location.href = data.approveUrl; // go to PayPal
+      window.location.href = data.approveUrl; // on to PayPal
     } catch (e) {
-      setError(String(e));
+      setError(friendly(String(e)));
       setDecision("");
     }
   }
 
+  const reasons = !proposal && reply ? blockedReasons(log) : [];
+  const pct = budget
+    ? Math.min(100, Math.round((budget.spent / budget.policy.monthlyBudget) * 100))
+    : 0;
+
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <h1 className="text-3xl font-bold text-[#001c64]">Purchasing agent</h1>
-      <a href="/history" className="text-sm font-semibold text-[#0070e0]">View spending and audit trail →</a>
-      <p className="mt-1 text-gray-600">
-        Describe what your team needs. The agent searches, checks the spending
-        policy, and proposes one purchase for your approval.
-      </p>
-
-      <div className="mt-6 flex gap-2">
-        <input
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-3"
-          placeholder="e.g. a waterproof hiking jacket under $100"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && ask()}
-        />
-        <button
-          onClick={ask}
-          disabled={loading}
-          className="rounded-lg bg-[#0070e0] px-5 py-3 font-semibold text-white disabled:opacity-50"
-        >
-          {loading ? "Working..." : "Ask agent"}
-        </button>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        {EXAMPLES.map((example) => (
-          <button
-            key={example}
-            onClick={() => setMessage(example)}
-            className="rounded-full border border-gray-300 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            {example}
-          </button>
-        ))}
-      </div>
-
-      {loading && (
-        <p className="mt-4 text-gray-500">
-          The agent is searching and checking policy. This can take up to a minute.
+    <div className="st-agent">
+      <section>
+        <h1 className="sm">What does your team need?</h1>
+        <p className="lead">
+          The agent searches, checks each option against your spending rules, and brings you one proposal.
+          Nothing is bought until you approve it.
         </p>
-      )}
-      {error && <p className="mt-4 rounded bg-red-50 p-3 text-red-700">{error}</p>}
 
-      {reply && (
-        <div className="mt-6 rounded-lg bg-gray-50 p-4">
-          <p className="text-sm font-semibold uppercase text-gray-500">Agent</p>
-          <p className="mt-1">{reply}</p>
+        <div className="st-ask">
+          <input
+            aria-label="What do you need?"
+            placeholder="For example: a waterproof hiking jacket under $100"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && ask()}
+          />
+          <button className="st-btn" onClick={ask} disabled={loading}>
+            {loading ? "Working" : "Ask the agent"}
+          </button>
         </div>
-      )}
 
-      {proposal && (
-        <div className="mt-6 rounded-xl border border-gray-200 p-4 shadow-sm">
-          <p className="text-sm font-semibold uppercase text-gray-500">Proposed purchase</p>
-          <div className="mt-3 flex gap-4">
-            {proposal.product.imageUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={proposal.product.imageUrl}
-                alt=""
-                className="h-28 w-28 rounded object-cover"
-              />
-            )}
-            <div>
-              <p className="text-lg font-semibold">{proposal.product.title}</p>
-              <p className="text-gray-600">
-                {proposal.product.brand} · {proposal.product.retailer}
-              </p>
-              <p className="mt-1 text-2xl font-bold">
-                ${proposal.product.price.toFixed(2)}{" "}
-                {proposal.product.listPrice && (
-                  <span className="text-base font-normal text-gray-400 line-through">
-                    ${proposal.product.listPrice.toFixed(2)}
-                  </span>
-                )}
-              </p>
-            </div>
+        <div className="st-chips">
+          {EXAMPLES.map((example) => (
+            <button key={example} className="st-chip" onClick={() => setMessage(example)}>
+              {example}
+            </button>
+          ))}
+        </div>
+
+        {loading && (
+          <p className="st-working" role="status">
+            <span className="st-pulse" />
+            Searching and checking policy. This can take up to a minute.
+          </p>
+        )}
+        {error && (
+          <p className="st-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        {reply && (
+          <div className="st-reply">
+            <p className="st-label">The agent says</p>
+            <p>{reply}</p>
           </div>
-          <p className="mt-3 text-sm text-gray-700">Why: {proposal.reason}</p>
-          <ul className="mt-2 list-disc pl-5 text-sm text-gray-600">
-            {proposal.policy.reasons.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
+        )}
 
-          {decision === "" ? (
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={approve}
-                disabled={!proposalId}
-                className="rounded-lg bg-green-600 px-4 py-2 font-semibold text-white disabled:opacity-50"
-              >
-                Approve and pay with PayPal
-              </button>
-              <button
-                onClick={() => setDecision("rejected")}
-                className="rounded-lg border border-gray-300 px-4 py-2 font-semibold"
-              >
-                Reject
-              </button>
+        {proposal && (
+          <article className="st-slip" aria-label="Proposed purchase">
+            <div className="st-slip-body">
+              {proposal.product.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={proposal.product.imageUrl} alt="" />
+              )}
+              <div>
+                <p className="st-label">Proposed purchase</p>
+                <h2 className="st-slip-title">{proposal.product.title}</h2>
+                <p className="st-muted">
+                  {proposal.product.brand
+                    ? `${proposal.product.brand} at ${proposal.product.retailer}`
+                    : proposal.product.retailer}
+                </p>
+                <p className="st-money st-slip-price">
+                  {money(proposal.product.price)}
+                  {proposal.product.listPrice && (
+                    <span className="st-was">{money(proposal.product.listPrice)}</span>
+                  )}
+                </p>
+              </div>
             </div>
-          ) : (
-            <p className="mt-4 font-semibold">
-              {decision === "approving"
-                ? "Opening PayPal..."
-                : "Rejected. Nothing was purchased."}
-            </p>
-          )}
-        </div>
-      )}
+            <div className="st-pad">
+              <p className="st-label">Why this one</p>
+              <p>{proposal.reason}</p>
+            </div>
+            <ul className="st-checks">
+              {checksFor(proposal, budget).map((c, i) => (
+                <li key={i} className={c.tone === "warn" ? "warn" : ""}>
+                  {c.text}
+                </li>
+              ))}
+            </ul>
+            <div className="st-cut" />
+            <div className="st-slip-foot">
+              {decision === "" && (
+                <>
+                  <button className="st-btn" onClick={approve} disabled={!proposalId}>
+                    Approve and pay with PayPal
+                  </button>
+                  <button className="st-btn ghost" onClick={() => setDecision("rejected")}>
+                    Reject
+                  </button>
+                </>
+              )}
+              {decision === "approving" && <p role="status">Opening PayPal…</p>}
+              {decision === "rejected" && <p>Rejected. Nothing was bought.</p>}
+            </div>
+          </article>
+        )}
 
-      {log.length > 0 && (
-        <details className="mt-6">
-          <summary className="cursor-pointer font-semibold">
-            Agent decision log ({log.length} steps)
-          </summary>
-          <ol className="mt-2 space-y-2 text-sm">
-            {log.map((l) => (
-              <li key={l.step} className="rounded bg-gray-50 p-2">
-                <span className="font-mono font-semibold">
-                  {l.step}. {l.tool}
-                </span>
-                <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-xs text-gray-600">
-                  {JSON.stringify(l.args)}
-                </pre>
-              </li>
-            ))}
-          </ol>
-        </details>
-      )}
-    </main>
+        {!proposal && reply && (
+          <div className="st-blocked">
+            <p className="st-tag bad">Nothing was bought</p>
+            {reasons.length > 0 ? (
+              <ul>
+                {reasons.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="st-muted" style={{ marginTop: 8 }}>
+                No option fit your spending rules.
+              </p>
+            )}
+          </div>
+        )}
+
+        {log.length > 0 && (
+          <details>
+            <summary>What the agent did ({log.length} steps)</summary>
+            <ol className="st-steps">
+              {log.map((l) => (
+                <li key={l.step}>{describe(l)}</li>
+              ))}
+            </ol>
+          </details>
+        )}
+      </section>
+
+      <aside className="st-aside" aria-label="Spending rules">
+        <h2>Spending rules</h2>
+        {budget ? (
+          <>
+            <p className="st-label">Left this month</p>
+            <p className="st-money st-big">
+              {money(Math.max(0, budget.policy.monthlyBudget - budget.spent))}
+            </p>
+            <div
+              className="st-meter"
+              role="img"
+              aria-label={`${pct} percent of the monthly budget used`}
+            >
+              <i style={{ width: `${pct}%` }} />
+            </div>
+            <p className="st-muted st-small">
+              {money(budget.spent)} spent of {money(budget.policy.monthlyBudget)}
+            </p>
+            <ul className="st-aside-list">
+              <li>Up to {money(budget.policy.perPurchaseCap)} for one purchase</li>
+              <li>You approve each purchase before PayPal charges anything</li>
+              <li>Never: {budget.policy.blockedKeywords.join(", ")}</li>
+            </ul>
+          </>
+        ) : (
+          <p className="st-muted">Loading your budget…</p>
+        )}
+        <Link href="/history">Open the audit trail</Link>
+      </aside>
+    </div>
   );
 }

@@ -1,13 +1,14 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 function Result() {
   const params = useSearchParams();
   const started = useRef(false);
   const [state, setState] = useState<"working" | "done" | "error">("working");
-  const [text, setText] = useState("Confirming your payment with PayPal...");
+  const [text, setText] = useState("Confirming your payment with PayPal.");
 
   useEffect(() => {
     if (started.current) return;
@@ -27,20 +28,27 @@ function Result() {
       })
       .catch((e) => {
         setState("error");
-        setText(String(e));
+        setText(String(e).replace(/^Error:\s*/, "").slice(0, 300));
       });
   }, [params]);
 
   return (
-    <main className="mx-auto max-w-xl p-6">
-      <h1 className="text-3xl font-bold text-[#001c64]">
-        {state === "done" ? "Purchase complete" : state === "error" ? "Payment problem" : "One moment"}
+    <section>
+      <h1 className="sm">
+        {state === "done" ? "Purchase complete" : state === "error" ? "The payment didn’t go through" : "One moment"}
       </h1>
-      <p className="mt-3 text-lg">{text}</p>
-      <a href="/agent" className="mt-6 inline-block font-semibold text-[#0070e0]">
-        Back to the agent
-      </a>
-    </main>
+      <p className="lead" role="status">
+        {text}
+      </p>
+      <div className="st-actions">
+        <Link href="/agent" className="st-btn">
+          Back to the agent
+        </Link>
+        <Link href="/history" className="st-btn ghost">
+          See the audit trail
+        </Link>
+      </div>
+    </section>
   );
 }
 
