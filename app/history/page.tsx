@@ -38,7 +38,7 @@ export default function HistoryPage() {
         {purchases.map((e) => (
           <li key={e.id} className="rounded-lg bg-green-50 p-3">
             <p className="font-semibold">{e.summary}</p>
-            <p className="text-sm text-gray-500">{new Date(e.time).toLocaleString()}</p>
+            <p className="text-sm text-gray-500">{new Date(e.time).toLocaleString("en-GB", { timeZone: "UTC" })} UTC</p>
           </li>
         ))}
       </ul>
@@ -48,7 +48,7 @@ export default function HistoryPage() {
         {entries.map((e) => (
           <li key={e.id} className="rounded bg-gray-50 p-2">
             <span className="font-mono text-xs text-gray-500">
-              {new Date(e.time).toLocaleString("en-GB", { timeZone: "UTC" })} UTC
+              {new Date(e.time).toLocaleTimeString("en-GB", { timeZone: "UTC" })} UTC · {e.type}
             </span>
             <p>{e.summary}</p>
           </li>
