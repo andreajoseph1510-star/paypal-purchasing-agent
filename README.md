@@ -4,9 +4,9 @@ Steward lets a small team describe what they need ("a waterproof hiking jacket u
 
 Built for the PayPal AI Hackathon.
 
-**Live demo:**//paypal-purchasing-agent.onrender.com
-**Demo video:** _add your YouTube link here_
+**Live demo:** [paypal-purchasing-agent.onrender.com](https://paypal-purchasing-agent.onrender.com)
 
+**Demo video:** coming soon
 ## The problem
 
 Small teams and clubs lose time on purchasing: someone finds an item, someone else approves it, someone pays. Handing this to an AI agent is tempting, but an agent with a payment method and no hard limits is risky. Steward shows a safer pattern: the AI does the searching and reasoning, while code enforces the policy and a human gives the final yes.
