@@ -85,14 +85,14 @@ Then:
 npm run dev
 ```
 
-Open http://localhost:3000/agent.
+Live at https://paypal-purchasing-agent.onrender.com
 
 ### Sandbox buyer account
 
 Use this PayPal sandbox **Personal** account on the PayPal approval page (fake money):
 
-- Email: _add your sandbox buyer email_
-- Password: _add your sandbox buyer password_
+- Email: sb-fi6t453393655@personal.example.com
+- Password: ={Ax)v0>
 
 ### Try it
 
