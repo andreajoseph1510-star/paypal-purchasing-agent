@@ -48,7 +48,7 @@ export default function HistoryPage() {
         {entries.map((e) => (
           <li key={e.id} className="rounded bg-gray-50 p-2">
             <span className="font-mono text-xs text-gray-500">
-              {new Date(e.time).toLocaleTimeString()} · {e.type}
+              {new Date(e.time).toLocaleString("en-GB", { timeZone: "UTC" })} UTC
             </span>
             <p>{e.summary}</p>
           </li>
