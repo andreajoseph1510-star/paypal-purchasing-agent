@@ -4,7 +4,7 @@ Steward lets a small team describe what they need ("a waterproof hiking jacket u
 
 Built for the PayPal AI Hackathon.
 
-**Live demo:** _add your Render URL here, or delete this line_
+**Live demo:**//paypal-purchasing-agent.onrender.com
 **Demo video:** _add your YouTube link here_
 
 ## The problem
@@ -85,7 +85,7 @@ Then:
 npm run dev
 ```
 
-Live at https://paypal-purchasing-agent.onrender.com
+
 
 ### Sandbox buyer account
 
