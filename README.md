@@ -4,9 +4,9 @@ Steward lets a small team describe what they need ("a waterproof hiking jacket u
 
 Built for the PayPal AI Hackathon.
 
-**Live demo:** _add your Render URL here, or delete this line_
-**Demo video:** _add your YouTube link here_
+**Live demo:** [paypal-purchasing-agent.onrender.com](https://paypal-purchasing-agent.onrender.com)
 
+**Demo video:** coming soon
 ## The problem
 
 Small teams and clubs lose time on purchasing: someone finds an item, someone else approves it, someone pays. Handing this to an AI agent is tempting, but an agent with a payment method and no hard limits is risky. Steward shows a safer pattern: the AI does the searching and reasoning, while code enforces the policy and a human gives the final yes.
@@ -85,14 +85,14 @@ Then:
 npm run dev
 ```
 
-Open http://localhost:3000/agent.
+
 
 ### Sandbox buyer account
 
 Use this PayPal sandbox **Personal** account on the PayPal approval page (fake money):
 
-- Email: _add your sandbox buyer email_
-- Password: _add your sandbox buyer password_
+- Email: sb-fi6t453393655@personal.example.com
+- Password: ={Ax)v0>
 
 ### Try it
 
